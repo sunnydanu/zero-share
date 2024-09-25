@@ -15,7 +15,7 @@ export const stunServers: string[] = [
 
 export const pageDescription = 'A client-side secure P2P file sharing using WebRTC.';
 
-export const githubLink = 'https://github.com/sunnydaun/zero-share';
+export const githubLink = 'https://github.com/sunnydanu/zero-share';
 
 export const defaultSendOptions: SendOptions = {
   chunkSize: 16 * 1024,
