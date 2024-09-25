@@ -1,6 +1,6 @@
 # Zero share
 
-[![website](https://img.shields.io/website?url=https%3A%2F%2Fzero-share.github.io)](https://zero-share.github.io/)
+[![website](https://img.shields.io/website?url=https%3A%2F%2Fzero-share.github.io)](https://godev.run/zero-share/)
 [![workflow](https://img.shields.io/github/actions/workflow/status/zero-share/zero-share.github.io/static.yml)](https://github.com/zero-share/zero-share.github.io/actions/workflows/static.yml)
 
 A client-side secure P2P file sharing using WebRTC.
@@ -19,7 +19,7 @@ A client-side secure P2P file sharing using WebRTC.
 
 ## Usage
 
-1. The offer goes to <https://zero-share.github.io/>.
+1. The offer goes to <https://godev.run/zero-share/>.
 2. The offer generates an offer link and then sends it to the answer.
 3. The answer opens the offer link and then sends it to the offer.
 4. The offer paste the answer code then click `Accept Answer`.
@@ -123,4 +123,8 @@ For feature requests, please open an issue on the GitHub repository to discuss y
 ## License
 
 This project is 100% open-source.
-[MIT License](https://github.com/ntsd/zero-share/blob/main/LICENSE) - Copyright &copy; 2023 Jirawat Boonkumnerd.
+[MIT License](https://github.com/sunnydanu/zero-share/blob/main/LICENSE) - Copyright &copy; 2024 Sunny Danu.
+
+## 6.0 Credits
+
+ [irawat Boonkumnerd]( https://github.com/ntsd/zero-share)
