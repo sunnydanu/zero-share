@@ -1,8 +1,8 @@
 {
-  "name": "zero-share",
+  "name": "godevrun:zero-share",
   "type": "module",
   "version": "0.0.1",
-  "author": "Jirawat Boonkumnerd <contact@ntsd.dev> (https://ntsd.dev)",
+  "author": "GoDevRun <contact@godev.run> (https://godev.run)",
   "scripts": {
     "dev": "astro dev",
     "start": "astro dev",
