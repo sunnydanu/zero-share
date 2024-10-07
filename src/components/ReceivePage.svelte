@@ -4,6 +4,8 @@
   import Eye from '../components/icons/Eye.svelte';
   import { Message } from '../proto/message';
   import Collapse from '../components/layout/Collapse.svelte';
+  import Actions from './Actions.svelte';
+
   import {
     exportRsaPublicKeyToBase64,
     generateRsaKeyPair,
@@ -16,6 +18,7 @@
   import QrModal from '../components/qr/QrModal.svelte';
 
   // options
+  let sendOptions = defaultSendOptions;
   let isEncrypt = defaultSendOptions.isEncrypt;
   let chunkSize = defaultSendOptions.chunkSize;
   let rsa: CryptoKeyPair; // private key
@@ -32,6 +35,7 @@
   let sendMode = false;
   let showNewFile = false;
   let qrModal: QrModal;
+  let content = '';
 
   // get url parameters
   const urlSearchParams = new URLSearchParams(window.location.search);
@@ -74,18 +78,29 @@
       isConnecting = true;
       qrModal.close();
     };
-    dataChannel.onmessage = (event) => {
-      const message = Message.decode(new Uint8Array(event.data));
 
-      if (message.metaData !== undefined) {
-        receiver.onMetaData(message.id, message.metaData);
-        showNewFile = true;
-      } else if (message.chunk !== undefined) {
-        receiver.onChunkData(message.id, message.chunk);
-      } else if (message.receiveEvent !== undefined) {
-        sender.onReceiveEvent(message.id, message.receiveEvent);
+    dataChannel.onmessage = (event) => {
+      // Check if the data is a string (e.g., JSON-encoded message)
+      if (typeof event.data === 'string') {
+        const message = JSON.parse(event.data);
+        if (message.type === 'clipboard') {
+          content = message.data; // Update content with received text
+        }
+      } else if (event.data instanceof ArrayBuffer) {
+        // Check if the data is a ArrayBuffer (e.g., file)
+
+        const message = Message.decode(new Uint8Array(event.data));
+        if (message.metaData !== undefined) {
+          receiver.onMetaData(message.id, message.metaData);
+          showNewFile = true;
+        } else if (message.chunk !== undefined) {
+          receiver.onChunkData(message.id, message.chunk);
+        } else if (message.receiveEvent !== undefined) {
+          sender.onReceiveEvent(message.id, message.receiveEvent);
+        }
       }
     };
+
     dataChannel.onerror = () => {
       addToastMessage('WebRTC error', 'error');
       isConnecting = false;
@@ -136,77 +151,77 @@
     }, waitIceCandidatesTimeout);
   }
   generateAnswerSDP();
+
+  // Function to handle input change
+  function handleInput(event: Event) {
+    const target = event.target as HTMLTextAreaElement;
+    content = target.value;
+    sendText(content); // Send updated text to the peer
+  }
+
+  // Function to send text to the peer
+  function sendText(text: string) {
+    if (dataChannel && dataChannel.readyState === 'open') {
+      const message = JSON.stringify({
+        type: 'clipboard',
+        data: text
+      });
+      dataChannel.send(message); // Send over P2P connection
+    }
+  }
 </script>
 
-<Collapse title="1. Answer" isOpen={!isConnecting}>
-  {#if answerSDP}
-    <p>
-      Copy and send the answer code to the Offer or scan QR code to connect between peer. See
-      <a
-        class="link"
-        href={githubLink + '#how-does-it-work'}
-        target="_blank"
-        rel="noopener noreferrer">How does it work?</a
-      >
-    </p>
-    <div class="relative mt-4">
-      <input
-        type={showAnswerCode ? 'text' : 'password'}
-        class="input input-bordered w-full"
-        value={answerSDP}
-        readonly
-      />
-      <div class="absolute top-0 right-0 p-1">
-        <Eye
-          onChange={(show) => {
-            showAnswerCode = show;
-          }}
+<Collapse title={isConnecting ? "Connected" : "Connection"} isOpen={!isConnecting || answerSDP}>
+  <Collapse title="1. Answer" isOpen={!isConnecting}>
+    {#if answerSDP}
+      <p>
+        Copy and send the answer code to the Offer or scan QR code to connect between peer. See
+        <a
+          class="link"
+          href={githubLink + '#how-does-it-work'}
+          target="_blank"
+          rel="noopener noreferrer">How does it work?</a
+        >
+      </p>
+      <div class="relative mt-4">
+        <input
+          type={showAnswerCode ? 'text' : 'password'}
+          class="input input-bordered w-full"
+          value={answerSDP}
+          readonly
         />
+        <div class="absolute top-0 right-0 p-1">
+          <Eye
+            onChange={(show) => {
+              showAnswerCode = show;
+            }}
+          />
+        </div>
       </div>
-    </div>
-    <div class="mt-4 flex gap-2">
-      <button class="btn btn-primary gap-2" on:click={copyAnswerCode}>
-        <ClipboardIcon />Copy Answer
-      </button>
-      <QrModal bind:this={qrModal} qrData={answerSDP} title="Answer QR Code" />
-    </div>
-  {:else}
-    <div class="flex flex-col items-center justify-center gap-2">
-      <span class="loading loading-spinner loading-lg" />
-      <div>Generating Answer</div>
-    </div>
-  {/if}
+      <div class="mt-4 flex gap-2">
+        <button class="btn btn-primary gap-2" on:click={copyAnswerCode}>
+          <ClipboardIcon />Copy Answer
+        </button>
+        <QrModal bind:this={qrModal} qrData={answerSDP} title="Answer QR Code" />
+      </div>
+    {:else}
+      <div class="flex flex-col items-center justify-center gap-2">
+        <span class="loading loading-spinner loading-lg" />
+        <div>Generating Answer</div>
+      </div>
+    {/if}
+  </Collapse>
 </Collapse>
-<Collapse title="2. Transfer Files" isOpen={isConnecting}>
-  <div class="flex w-full mb-4 mt-2">
-    <button
-      class="btn {sendMode ? 'btn-primary' : 'btn-ghost'} flex-grow border-black border-dotted"
-      on:click={() => {
-        sendMode = true;
-      }}
-    >
-      <span class="btm-nav-label">Send</span>
-    </button>
-    <div class="indicator flex-grow">
-      <span
-        class="indicator-item badge badge-accent animate-bounce {showNewFile ? 'block' : 'hidden'}"
-        >New files</span
-      >
-      <button
-        class="btn {sendMode ? 'btn-ghost' : 'btn-primary'} w-full border-black border-dotted"
-        on:click={() => {
-          showNewFile = false;
-          sendMode = false;
-        }}
-      >
-        <span class="btm-nav-label">Receive</span>
-      </button>
-    </div>
-  </div>
-  <div hidden={!sendMode}>
-    <Sender bind:this={sender} {dataChannel} {rsaPub} {isEncrypt} {chunkSize} />
-  </div>
-  <div hidden={sendMode}>
-    <Receiver bind:this={receiver} {dataChannel} {isEncrypt} {rsa} />
-  </div>
-</Collapse>
+
+<Actions
+  {sender}
+  {receiver}
+  {content}
+  {isConnecting}
+  {showNewFile}
+  {dataChannel}
+  {rsaPub}
+  {rsa}
+  {handleInput}
+  {sendOptions}
+/>
