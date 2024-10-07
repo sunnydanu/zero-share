@@ -6,6 +6,7 @@
   import { Message } from '../proto/message';
   import Collapse from './layout/Collapse.svelte';
   import OfferOptions from './OfferOptions.svelte';
+  import Actions from './Actions.svelte';
   import {
     exportRsaPublicKeyToBase64,
     generateRsaKeyPair,
@@ -40,6 +41,7 @@
   let sendMode = true;
   let showNewFile = false;
   let showOfferOptions = false;
+  let content = '';
 
   async function createSDPLink(offer: RTCSessionDescription) {
     let publicKeyBase64 = '';
@@ -84,16 +86,26 @@
       addToastMessage('Connected', 'success');
       isConnecting = true;
     };
-    dataChannel.onmessage = (event) => {
-      const message = Message.decode(new Uint8Array(event.data));
 
-      if (message.metaData !== undefined) {
-        receiver.onMetaData(message.id, message.metaData);
-        showNewFile = true;
-      } else if (message.chunk !== undefined) {
-        receiver.onChunkData(message.id, message.chunk);
-      } else if (message.receiveEvent !== undefined) {
-        sender.onReceiveEvent(message.id, message.receiveEvent);
+    dataChannel.onmessage = (event) => {
+      // Check if the data is a string (e.g., JSON-encoded message)
+      if (typeof event.data === 'string') {
+        const message = JSON.parse(event.data);
+        if (message.type === 'clipboard') {
+          content = message.data; // Update content with received text
+        }
+      } else if (event.data instanceof ArrayBuffer) {
+        // Check if the data is a ArrayBuffer (e.g., file)
+
+        const message = Message.decode(new Uint8Array(event.data));
+        if (message.metaData !== undefined) {
+          receiver.onMetaData(message.id, message.metaData);
+          showNewFile = true;
+        } else if (message.chunk !== undefined) {
+          receiver.onChunkData(message.id, message.chunk);
+        } else if (message.receiveEvent !== undefined) {
+          sender.onReceiveEvent(message.id, message.receiveEvent);
+        }
       }
     };
     dataChannel.onerror = () => {
@@ -156,121 +168,119 @@
   function onOptionsUpdate(options: SendOptions) {
     sendOptions = options;
   }
+
+  // Function to handle input change
+  function handleInput(event: Event) {
+    const target = event.target as HTMLTextAreaElement;
+    content = target.value;
+    sendText(content); // Send updated text to the peer
+  }
+
+  // Function to send text to the peer
+  function sendText(text: string) {
+    if (dataChannel && dataChannel.readyState === 'open') {
+      const message = JSON.stringify({
+        type: 'clipboard',
+        data: text
+      });
+      dataChannel.send(message); // Send over P2P connection
+    }
+  }
 </script>
 
-<Collapse title="1. Generate Offer" isOpen={!offerLink}>
-  {#if generating}
-    <div class="flex flex-col items-center justify-center gap-2">
-      <span class="loading loading-spinner loading-lg" />
-      <div>Generating Offer</div>
-    </div>
-  {:else}
-    <p>
-      Generate the SDP offer and build the offer link following the options. See
-      <a
-        class="link"
-        href={githubLink + '#how-does-it-work'}
-        target="_blank"
-        rel="noopener noreferrer">How does it work?</a
-      >
-    </p>
-    <div class="mt-4">
-      {#if showOfferOptions}
-        <OfferOptions onUpdate={onOptionsUpdate} />
-      {/if}
-      <div class="mt-4 flex flex-row gap-2">
-        <button class="btn btn-primary" on:click={generateOfferLink}>Generate Offer</button>
-        {#if !showOfferOptions}
-          <button
-            class="btn btn-secondary gap-2"
-            on:click={() => {
-              showOfferOptions = true;
-            }}
-          >
-            Settings
-          </button>
-        {/if}
+<Collapse title={isConnecting ? "Connected" : "Connection"} isOpen={!offerLink || (offerLink !== '' && !isConnecting)}>
+  <Collapse title="1. Generate Offer" isOpen={!offerLink}>
+    {#if generating}
+      <div class="flex flex-col items-center justify-center gap-2">
+        <span class="loading loading-spinner loading-lg" />
+        <div>Generating Offer</div>
       </div>
-    </div>
-  {/if}
-</Collapse>
+    {:else}
+      <p>
+        Generate the SDP offer and build the offer link following the options. See
+        <a
+          class="link"
+          href={githubLink + '#how-does-it-work'}
+          target="_blank"
+          rel="noopener noreferrer">How does it work?</a
+        >
+      </p>
+      <div class="mt-4">
+        {#if showOfferOptions}
+          <OfferOptions onUpdate={onOptionsUpdate} />
+        {/if}
+        <div class="mt-4 flex flex-row gap-2">
+          <button class="btn btn-primary" on:click={generateOfferLink}>Generate Offer</button>
+          {#if !showOfferOptions}
+            <button
+              class="btn btn-secondary gap-2"
+              on:click={() => {
+                showOfferOptions = true;
+              }}
+            >
+              Settings
+            </button>
+          {/if}
+        </div>
+      </div>
+    {/if}
+  </Collapse>
 
-<Collapse title="2. Accept Answer" isOpen={offerLink !== '' && !isConnecting}>
-  {#if offerLink}
-    <p class="">Copy and send the offer link or scan QR Code to connect between peers.</p>
-    <div class="mt-2 relative">
-      <input
-        type={showOfferLink ? 'text' : 'password'}
-        class="input input-bordered w-full"
-        value={offerLink}
-        readonly
-      />
-      <div class="absolute top-0 right-0 p-1">
-        <Eye
-          onChange={(show) => {
-            showOfferLink = show;
+  <Collapse title="2. Accept Answer" isOpen={offerLink !== '' && !isConnecting}>
+    {#if offerLink}
+      <p class="">Copy and send the offer link or scan QR Code to connect between peers.</p>
+      <div class="mt-2 relative">
+        <input
+          type={showOfferLink ? 'text' : 'password'}
+          class="input input-bordered w-full"
+          value={offerLink}
+          readonly
+        />
+        <div class="absolute top-0 right-0 p-1">
+          <Eye
+            onChange={(show) => {
+              showOfferLink = show;
+            }}
+          />
+        </div>
+      </div>
+      <div class="mt-4 flex gap-2">
+        <button class="btn btn-primary gap-2" on:click={copyOfferLink}>
+          <ClipboardIcon />Copy Link
+        </button>
+        <QrModal
+          qrData={offerLink}
+          title="Offer QR Code"
+          correctionLevel={ErrorCorrectionLevel.M}
+        />
+      </div>
+      <p class="mt-4">Enter the Answer Code to accept the Answer or scan the QR Code.</p>
+      <div class="relative mt-4">
+        <input type="password" class="input input-bordered w-full" bind:value={answerSDP} />
+      </div>
+      <div class="mt-4 flex gap-2">
+        <button class="btn btn-primary" on:click={acceptAnswer}>Accept Answer</button>
+        <ScanQrModal
+          onScanSuccess={(data) => {
+            answerSDP = data;
+            acceptAnswer();
           }}
         />
       </div>
-    </div>
-    <div class="mt-4 flex gap-2">
-      <button class="btn btn-primary gap-2" on:click={copyOfferLink}>
-        <ClipboardIcon />Copy Link
-      </button>
-      <QrModal qrData={offerLink} title="Offer QR Code" correctionLevel={ErrorCorrectionLevel.M} />
-    </div>
-    <p class="mt-4">Enter the Answer Code to accept the Answer or scan the QR Code.</p>
-    <div class="relative mt-4">
-      <input type="password" class="input input-bordered w-full" bind:value={answerSDP} />
-    </div>
-    <div class="mt-4 flex gap-2">
-      <button class="btn btn-primary" on:click={acceptAnswer}>Accept Answer</button>
-      <ScanQrModal
-        onScanSuccess={(data) => {
-          answerSDP = data;
-          acceptAnswer();
-        }}
-      />
-    </div>
-  {/if}
+    {/if}
+  </Collapse>
 </Collapse>
 
-<Collapse title="3. Transfer Files" isOpen={isConnecting}>
-  <div class="flex w-full mb-4 mt-2">
-    <button
-      class="btn {sendMode ? 'btn-primary' : 'btn-ghost'} flex-grow border-black border-dotted"
-      on:click={() => {
-        sendMode = true;
-      }}
-    >
-      <span class="btm-nav-label">Send</span>
-    </button>
-    <div class="indicator flex-grow">
-      <span
-        class="indicator-item badge badge-accent animate-bounce {showNewFile ? 'block' : 'hidden'}"
-        >New files</span
-      >
-      <button
-        class="btn {sendMode ? 'btn-ghost' : 'btn-primary'} w-full border-black border-dotted"
-        on:click={() => {
-          showNewFile = false;
-          sendMode = false;
-        }}
-      >
-        <span class="btm-nav-label">Receive</span>
-      </button>
-    </div>
-  </div>
-  <div hidden={!sendMode}>
-    <Sender
-      bind:this={sender}
-      {dataChannel}
-      {rsaPub}
-      isEncrypt={sendOptions.isEncrypt}
-      chunkSize={sendOptions.chunkSize}
-    />
-  </div>
-  <div hidden={sendMode}>
-    <Receiver bind:this={receiver} {dataChannel} isEncrypt={sendOptions.isEncrypt} {rsa} />
-  </div>
-</Collapse>
+<Actions
+  {sender}
+  {receiver}
+  {content}
+  {isConnecting}
+  {showNewFile}
+  {dataChannel}
+  {rsaPub}
+  {rsa}
+  {handleInput}
+  {sendOptions}
+/>
+
